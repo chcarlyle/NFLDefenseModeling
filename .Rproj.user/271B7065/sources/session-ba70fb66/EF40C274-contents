@@ -1,0 +1,38 @@
+---
+title: "HW 6 Stan"
+author: "Caleb Carlyle"
+format: pdf
+editor: visual
+---
+
+```{r}
+library(rstan)
+dat <- read.table('wheatmoisture.dat', header=TRUE)
+
+moisture <- dat$moisture
+yield <- dat$yield
+n <- length(moisture)
+
+stan_data <- list(n = n, moisture = moisture, yield = yield)
+stan_model_file <- "wheatmoisture.stan"
+
+fit <- stan(file = stan_model_file, data = stan_data, 
+            iter = 152000, warmup = 2000, thin = 50, 
+            chains = 5, seed = 253, init=0)
+print(fit, pars = c("b0", "b1", "ss"))
+```
+
+```{r}
+library(coda)
+samples <- As.mcmc.list(fit)
+print(raftery.diag(as.matrix(samples))$resmatrix[1:3,])
+print(effectiveSize(as.matrix(samples))[1:3])
+```
+
+```{r}
+library(loo)
+
+log_lik <- extract_log_lik(fit)
+loo_results <- loo(log_lik)
+print(loo_results)
+```

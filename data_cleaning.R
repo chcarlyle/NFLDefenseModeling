@@ -128,21 +128,41 @@ defenders_long <- bind_rows(roles_long, pressures_long) %>%
   # If a player appears twice in same role (rare), keep a single row
   distinct(game_id, play_id, defteam, role, player_id, position, position_group,
            .keep_all = TRUE)
-
-play_defense_summary <- defenders_long %>%
+agg_def <- defenders_long %>%
   group_by(game_id, play_id, posteam, defteam) %>%
   summarise(
-    n_defenders   = n(),
-    DL_involved   = sum(position_group == "DL"),
-    LB_involved   = sum(position_group == "LB"),
-    DB_involved   = sum(position_group == "DB"),
-    any_pressure  = any(role == "pressure"),
-    any_sack      = any(role %in% c("sack_player_id","half_sack_1_player_id","half_sack_2_player_id")),
-    any_pd        = any(role %in% c("pass_defense_1_player_id","pass_defense_2_player_id")),
-    any_tackle    = any(str_detect(role, "tackle")),
+    n_defenders  = n(),
+    DL_involved  = sum(position_group == "DL"),
+    LB_involved  = sum(position_group == "LB"),
+    DB_involved  = sum(position_group == "DB"),
+    any_pressure = any(role == "pressure"),
+    any_sack     = any(role %in% c("sack_player_id","half_sack_1_player_id","half_sack_2_player_id")),
+    any_pd       = any(role %in% c("pass_defense_1_player_id","pass_defense_2_player_id")),
+    any_tackle   = any(str_detect(role, "tackle")),
     .groups = "drop"
+  )
+
+# Build the play-level table from *all* scrimmage plays, then left-join aggregates
+play_defense_summary <- pbp %>%
+  # Keep helpful play-level fields (incl. touchdowns)
+  transmute(
+    game_id, play_id, posteam, defteam, desc, play_type, epa,
+    touchdown = as.logical(touchdown),              # keep TD flag
+    pass_touchdown = as.logical(pass_touchdown),
+    rush_touchdown = as.logical(rush_touchdown),
+    return_touchdown = as.logical(return_touchdown)
   ) %>%
-  left_join(pbp %>% select(game_id, play_id, desc, play_type, epa),
-            by = c("game_id","play_id"))
+  left_join(agg_def, by = c("game_id","play_id","posteam","defteam")) %>%
+  # Fill plays with no defender rows (including TDs) with zeros/FALSE
+  mutate(
+    n_defenders  = coalesce(n_defenders, 0L),
+    DL_involved  = coalesce(DL_involved, 0L),
+    LB_involved  = coalesce(LB_involved, 0L),
+    DB_involved  = coalesce(DB_involved, 0L),
+    any_pressure = coalesce(any_pressure, FALSE),
+    any_sack     = coalesce(any_sack, FALSE),
+    any_pd       = coalesce(any_pd, FALSE),
+    any_tackle   = coalesce(any_tackle, FALSE)
+  )
 
 write.csv(play_defense_summary, 'plays_with_positions.csv')

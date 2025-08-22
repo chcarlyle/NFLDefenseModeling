@@ -1,0 +1,11 @@
+library(ggdag)
+
+inc_play_out <- dagify(
+  incomplete ~ qb_error + receiver_error + pass_defense + qb_pressure,
+  pass_defense ~ db_coverage + lb_coverage,
+  qb_pressure ~ dl_pressure + lb_blitz
+)
+
+ggdag(inc_play_out, text = FALSE, use_labels = "name") +
+  theme_dag()
+
